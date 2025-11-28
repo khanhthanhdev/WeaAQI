@@ -11,4 +11,10 @@ fonts-noto-color-emoji
 swig
 liblgpio-dev
 libsystemd-dev
-libheif-dev
+libheif-dev>=1.13.0
+libheif1>=1.13.0
+libjpeg-dev
+libpng-dev
+zlib1g-dev
+liblcms2-dev
+libwebp-dev
