@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 _SWIFTSHADER_ARCHITECTURES = {"x86_64", "amd64", "i386", "i686"}
 _CHROMIUM_EXECUTABLES = [
-    "chromium-headless-shell",
     "chromium-browser",
     "chromium",
     "google-chrome",
-    "google-chrome-stable"
+    "google-chrome-stable",
+    "chromium-headless-shell"
 ]
 
 
@@ -192,6 +192,10 @@ def take_screenshot(target, dimensions, timeout_ms=None):
             if result.returncode == 0 and os.path.exists(img_file_path):
                 screenshot_taken = True
                 break
+
+            # Skip executables that fail with SIGILL (illegal instruction, often due to architecture mismatch)
+            if result.returncode == 132:
+                continue
 
             stderr_output = result.stderr.decode('utf-8', errors='replace')
             message = f"{executable} exited with code {result.returncode}: {stderr_output.strip()}"
