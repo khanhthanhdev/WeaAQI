@@ -1,7 +1,7 @@
 
 # Storing API Keys
 
-Certain plugins, like the AI Image plugin, require API credentials to function. These credentials must be stored in a .env file located at the root of the project. Once you have your API token, follow these steps:
+Certain plugins require API credentials to function. These credentials must be stored in a .env file located at the root of the project. Once you have your API token, follow these steps:
 
 1. SSH into your Raspberry Pi and navigate to the InkyPi directory:
     ```bash
@@ -16,19 +16,6 @@ Certain plugins, like the AI Image plugin, require API credentials to function. 
     PLUGIN_KEY=your-key
     ```
 4. Save the file and exit the editor
-
-## Open AI Key
-
-Required for the AI Image and AI Text Plugins
-
-- Login or create an account on the [Open AI developer platform](https://platform.openai.com/docs/overview)
-- Crate a secret key from the API Keys tab in the Settings page
-    - It is recommended to set up Auto recharge (found in the "Billing" tab)
-    - Optionally set a Budge Limit in the Limits tab
-- Store your key in the .env file with the key `OPEN_AI_SECRET`
-    ```
-    OPEN_AI_SECRET=your-key
-    ```
 
 ## Open Weather Map Key
 
