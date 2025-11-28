@@ -7,10 +7,19 @@ import hashlib
 import tempfile
 import subprocess
 import platform
+import shutil
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 _SWIFTSHADER_ARCHITECTURES = {"x86_64", "amd64", "i386", "i686"}
+_CHROMIUM_EXECUTABLES = [
+    "chromium-headless-shell",
+    "chromium-browser",
+    "chromium",
+    "google-chrome",
+    "google-chrome-stable"
+]
 
 
 def _get_gl_flag():
@@ -18,6 +27,39 @@ def _get_gl_flag():
     if arch in _SWIFTSHADER_ARCHITECTURES:
         return "--use-gl=swiftshader"
     return "--use-gl=egl"
+
+
+def _normalize_target(target: str) -> str:
+    if target.startswith(("http://", "https://", "file://")):
+        return target
+    if os.path.exists(target):
+        return Path(target).resolve().as_uri()
+    return target
+
+
+def _build_chromium_command(executable, target, img_file_path, dimensions):
+    gl_flag = _get_gl_flag()
+    base_flags = [
+        "--headless",
+        f"--screenshot={img_file_path}",
+        f"--window-size={dimensions[0]},{dimensions[1]}",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        gl_flag,
+        "--hide-scrollbars",
+        "--in-process-gpu",
+        "--js-flags=--jitless",
+        "--disable-zero-copy",
+        "--disable-gpu-memory-buffer-compositor-resources",
+        "--disable-extensions",
+        "--disable-plugins",
+        "--mute-audio",
+        "--no-sandbox"
+    ]
+
+    if executable == "chromium-headless-shell":
+        return [executable, target, *base_flags]
+    return [executable, *base_flags, target]
 
 def get_image(image_url):
     response = requests.get(image_url)
@@ -114,50 +156,66 @@ def take_screenshot_html(html_str, dimensions, timeout_ms=None):
 
 def take_screenshot(target, dimensions, timeout_ms=None):
     image = None
+    img_file_path = None
     try:
         # Create a temporary output file for the screenshot
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as img_file:
             img_file_path = img_file.name
 
-        gl_flag = _get_gl_flag()
-        command = [
-            "chromium-headless-shell",
-            target,
-            "--headless",
-            f"--screenshot={img_file_path}",
-            f"--window-size={dimensions[0]},{dimensions[1]}",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            gl_flag,
-            "--hide-scrollbars",
-            "--in-process-gpu",
-            "--js-flags=--jitless",
-            "--disable-zero-copy",
-            "--disable-gpu-memory-buffer-compositor-resources",
-            "--disable-extensions",
-            "--disable-plugins",
-            "--mute-audio",
-            "--no-sandbox"
-        ]
-        if timeout_ms:
-            command.append(f"--timeout={timeout_ms}")
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        normalized_target = _normalize_target(target)
+        timeout_seconds = (timeout_ms / 1000.0) if timeout_ms else None
 
-        # Check if the process failed or the output file is missing
-        if result.returncode != 0 or not os.path.exists(img_file_path):
-            logger.error("Failed to take screenshot:")
-            logger.error(result.stderr.decode('utf-8'))
+        errors = []
+        screenshot_taken = False
+        for executable in _CHROMIUM_EXECUTABLES:
+            if shutil.which(executable) is None:
+                continue
+
+            command = _build_chromium_command(executable, normalized_target, img_file_path, dimensions)
+            run_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE}
+            if timeout_seconds:
+                run_kwargs["timeout"] = timeout_seconds
+
+            try:
+                result = subprocess.run(command, **run_kwargs)
+            except subprocess.TimeoutExpired:
+                message = f"{executable} timed out after {timeout_seconds} seconds"
+                errors.append(message)
+                logger.error(message)
+                continue
+            except Exception as exc:
+                message = f"{executable} failed: {exc}"
+                errors.append(message)
+                logger.error(message)
+                continue
+
+            if result.returncode == 0 and os.path.exists(img_file_path):
+                screenshot_taken = True
+                break
+
+            stderr_output = result.stderr.decode('utf-8', errors='replace')
+            message = f"{executable} exited with code {result.returncode}: {stderr_output.strip()}"
+            errors.append(message)
+            logger.error(message)
+
+        if not screenshot_taken:
+            if not errors:
+                logger.error("Failed to take screenshot: No chromium executable found")
+            else:
+                logger.error("Failed to take screenshot:")
+                for err in errors:
+                    logger.error(err)
             return None
 
         # Load the image using PIL
         with Image.open(img_file_path) as img:
             image = img.copy()
 
-        # Remove image files
-        os.remove(img_file_path)
-
     except Exception as e:
         logger.error(f"Failed to take screenshot: {str(e)}")
+    finally:
+        if img_file_path and os.path.exists(img_file_path):
+            os.remove(img_file_path)
 
     return image
 
