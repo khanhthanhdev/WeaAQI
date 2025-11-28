@@ -78,6 +78,9 @@ def apply_image_enhancement(img, image_settings={}):
 
 def compute_image_hash(image):
     """Compute SHA-256 hash of an image."""
+    if image is None:
+        logger.error("Cannot compute hash: image is None")
+        return None
     image = image.convert("RGB")
     img_bytes = image.tobytes()
     return hashlib.sha256(img_bytes).hexdigest()
