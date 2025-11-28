@@ -112,16 +112,13 @@ class RefreshTask:
                             continue
                         plugin = get_plugin_instance(plugin_config)
                         image = refresh_action.execute(plugin, self.device_config, current_dt)
-                         
                         if image is None:
-                             logger.error(f"Failed to render image for plugin '{refresh_action.get_plugin_id()}'")
-                             continue
-                             
+                            raise RuntimeError(f"Plugin '{refresh_action.get_plugin_id()}' returned no image")
                         image_hash = compute_image_hash(image)
 
                         refresh_info = refresh_action.get_refresh_info()
                         refresh_info.update({"refresh_time": current_dt.isoformat(), "image_hash": image_hash})
-                         # check if image is the same as current image
+                        # check if image is the same as current image
                         if image_hash != latest_refresh.image_hash:
                             logger.info(f"Updating display. | refresh_info: {refresh_info}")
                             self.display_manager.display_image(image, image_settings=plugin.config.get("image_settings", []))

@@ -6,8 +6,18 @@ import logging
 import hashlib
 import tempfile
 import subprocess
+import platform
 
 logger = logging.getLogger(__name__)
+
+_SWIFTSHADER_ARCHITECTURES = {"x86_64", "amd64", "i386", "i686"}
+
+
+def _get_gl_flag():
+    arch = platform.machine().lower()
+    if arch in _SWIFTSHADER_ARCHITECTURES:
+        return "--use-gl=swiftshader"
+    return "--use-gl=egl"
 
 def get_image(image_url):
     response = requests.get(image_url)
@@ -79,8 +89,7 @@ def apply_image_enhancement(img, image_settings={}):
 def compute_image_hash(image):
     """Compute SHA-256 hash of an image."""
     if image is None:
-        logger.error("Cannot compute hash: image is None")
-        return None
+        raise ValueError("Cannot compute hash of an empty image")
     image = image.convert("RGB")
     img_bytes = image.tobytes()
     return hashlib.sha256(img_bytes).hexdigest()
@@ -110,6 +119,7 @@ def take_screenshot(target, dimensions, timeout_ms=None):
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as img_file:
             img_file_path = img_file.name
 
+        gl_flag = _get_gl_flag()
         command = [
             "chromium-headless-shell",
             target,
@@ -118,7 +128,7 @@ def take_screenshot(target, dimensions, timeout_ms=None):
             f"--window-size={dimensions[0]},{dimensions[1]}",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--use-gl=swiftshader",
+            gl_flag,
             "--hide-scrollbars",
             "--in-process-gpu",
             "--js-flags=--jitless",
